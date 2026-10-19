@@ -25,7 +25,37 @@ namespace FFmpegConverterApp
     public class VideoItem
     {
         public string FilePath { get; set; } = "";
-        public string FileName => Path.GetFileName(FilePath);
+
+        public bool IsUrl => FilePath.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
+                             FilePath.StartsWith("https://", StringComparison.OrdinalIgnoreCase);
+
+        public string FileName
+        {
+            get
+            {
+                if (IsUrl)
+                {
+                    try
+                    {
+                        var uri = new Uri(FilePath);
+                        string leaf = Path.GetFileName(uri.AbsolutePath);
+                        if (string.IsNullOrEmpty(leaf) || leaf.Equals("index.m3u8", StringComparison.OrdinalIgnoreCase))
+                        {
+                            var segments = uri.AbsolutePath.Split('/', StringSplitOptions.RemoveEmptyEntries);
+                            if (segments.Length > 1)
+                                return $"{segments[segments.Length - 2]}.mp4";
+                        }
+                        return string.IsNullOrEmpty(leaf) ? uri.Host : leaf;
+                    }
+                    catch
+                    {
+                        return FilePath;
+                    }
+                }
+                return Path.GetFileName(FilePath);
+            }
+        }
+
         public string Duration { get; set; } = "En attente...";
         public string Size { get; set; } = "";
         public string Status { get; set; } = "En attente";
@@ -35,7 +65,7 @@ namespace FFmpegConverterApp
     {
         private bool isDarkMode = true;
 
-        // Palette dynamique pour le thème Good / Keentheme
+        // Palette dynamique pour le thème
         private Color BgDarkSidebar;
         private Color BgDarkMain;
         private Color BgCard;
@@ -62,7 +92,8 @@ namespace FFmpegConverterApp
         // Zone principale
         private Panel panelMain = null!;
         private TextBox txtSourceBar = null!;
-        private Button btnBrowseSource = null!;
+        private RoundedButton btnAddUrl = null!;
+        private RoundedButton btnBrowseSource = null!;
 
         // GroupBoxes
         private RoundedGroupBox grpPreset = null!, grpProg = null!;
@@ -71,7 +102,7 @@ namespace FFmpegConverterApp
         private Label lblOut = null!, lblFmt = null!, lblCodec = null!, lblRes = null!, lblSpeed = null!, lblExist = null!;
         private ComboBox cboCodec = null!, cboResolution = null!, cboSpeedPreset = null!;
         private TextBox txtOutFolder = null!;
-        private Button btnBrowseOutFolder = null!;
+        private RoundedButton btnBrowseOutFolder = null!;
 
         private RadioButton rbMKV = null!, rbMP4 = null!, rbAVI = null!, rbWebM = null!;
         private RadioButton rbExistOverwrite = null!, rbExistSkip = null!, rbExistRename = null!, rbExistAsk = null!;
@@ -82,7 +113,7 @@ namespace FFmpegConverterApp
         private Label lblDrag = null!;
         private DataGridView gridFiles = null!;
         private List<VideoItem> videoList = new List<VideoItem>();
-        private Button btnRemove = null!, btnClear = null!;
+        private RoundedButton btnRemove = null!, btnClear = null!;
 
         // Progression & Actions
         private RoundedButton btnStart = null!, btnStop = null!, btnBench = null!;
@@ -114,18 +145,18 @@ namespace FFmpegConverterApp
 
             picLogo = new PictureBox
             {
-                Location = new Point(15, 15),
-                Size = new Size(40, 40),
+                Location = new Point(12, 10),
+                Size = new Size(100, 50),
                 SizeMode = PictureBoxSizeMode.Zoom,
                 BackColor = Color.Transparent
             };
 
             lblAppTitle = new Label
             {
-                Text = "VIDEOTEK\n2026.TSK- Odyssée",
-                Location = new Point(62, 16),
-                Size = new Size(165, 38),
-                Font = new Font("Segoe UI", 8.5F, FontStyle.Bold)
+                Text = "VIDEOTEK\n2026.TSK",
+                Location = new Point(130, 30),
+                Size = new Size(90, 45),
+                Font = new Font("Segoe UI", 8F, FontStyle.Bold)
             };
 
             btnNavConvert = CreateRoundedButton("Convertir", 15, 75, 210, 38, AccentPurple, Color.White);
@@ -161,15 +192,27 @@ namespace FFmpegConverterApp
             txtSourceBar = new TextBox
             {
                 Location = new Point(20, 18),
-                Size = new Size(820, 28),
+                Size = new Size(710, 28),
                 BorderStyle = BorderStyle.FixedSingle,
-                Text = "Glissez vos fichiers ou entrez le chemin d'accès..."
+                Text = "Collez une URL (http/https/m3u8) ou le chemin d'un fichier..."
             };
 
-            btnBrowseSource = CreateRoundedButton("Choisir un fichier", 850, 17, 110, 29, AccentPurple, Color.White);
+            txtSourceBar.KeyDown += (s, e) =>
+            {
+                if (e.KeyCode == Keys.Enter)
+                {
+                    e.SuppressKeyPress = true;
+                    AddInputPathOrUrl(txtSourceBar.Text);
+                }
+            };
+
+            btnAddUrl = CreateRoundedButton("+ Ajouter", 740, 17, 100, 29, AccentGreen, Color.Black);
+            btnAddUrl.Click += (s, e) => AddInputPathOrUrl(txtSourceBar.Text);
+
+            btnBrowseSource = CreateRoundedButton("Parcourir...", 850, 17, 110, 29, AccentPurple, Color.White);
             btnBrowseSource.Click += (s, e) => OpenFilesDialog();
 
-            // Groupe des Presets & Options
+            // Groupe Presets
             grpPreset = CreateGroupBox("Presets & Directives d'encodage", 20, 60, 940, 230);
 
             lblOut = new Label { Text = "Dossier de sortie :", Location = new Point(15, 25), AutoSize = true };
@@ -224,7 +267,7 @@ namespace FFmpegConverterApp
                 chkFastStart, chkAAC, chkMute, lblExist, rbExistOverwrite, rbExistRename, rbExistSkip, rbExistAsk
             });
 
-            // Zone Glisser-Déposer
+            // Glisser-Déposer
             dragDropZone = new RoundedPanel { Location = new Point(20, 300), Size = new Size(940, 55), CornerRadius = 10, AllowDrop = true };
 
             lblDrag = new Label
@@ -245,7 +288,7 @@ namespace FFmpegConverterApp
             lblDrag.DragEnter += DragDropZone_DragEnter;
             lblDrag.DragDrop += DragDropZone_DragDrop;
 
-            // --- TABLEAU (DATA GRID VIEW - STYLE KEENTHEME GOOD) ---
+            // Tableau
             gridFiles = new DataGridView
             {
                 Location = new Point(20, 365),
@@ -264,14 +307,14 @@ namespace FFmpegConverterApp
             gridFiles.ColumnHeadersDefaultCellStyle.Font = new Font("Segoe UI", 9F, FontStyle.Bold);
             gridFiles.DefaultCellStyle.Font = new Font("Segoe UI", 9F, FontStyle.Regular);
 
-            gridFiles.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "FileName", 	HeaderText = "NOM DU FICHIER", Width = 380 });
-            gridFiles.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "Duration", 	HeaderText = "DURÉE", Width = 120 });
-            gridFiles.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "Size", 		HeaderText = "TAILLE", Width = 120 });
-            gridFiles.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "Status", 		HeaderText = "STATUT", Width = 300 });
+            gridFiles.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "FileName", HeaderText = "NOM DU FICHIER / SOURCE", Width = 380 });
+            gridFiles.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "Duration", HeaderText = "DURÉE", Width = 120 });
+            gridFiles.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "Size", HeaderText = "TAILLE", Width = 120 });
+            gridFiles.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "Status", HeaderText = "STATUT", Width = 300 });
 
-            // Boutons d'action
+            // Actions
             btnStart = CreateRoundedButton("Démarrer la conversion", 20, 555, 300, 42, AccentPurple, Color.White);
-            btnStart.Font = new Font("Segoe UI", 10.5F, FontStyle.Bold);
+            btnStart.Font = new Font("Segoe UI", 10F, FontStyle.Bold);
             btnStart.Click += BtnStart_Click;
 
             btnBench = CreateRoundedButton("BENCH (Tester la puissance)", 330, 555, 250, 42, AccentGreen, Color.Black);
@@ -289,7 +332,7 @@ namespace FFmpegConverterApp
             btnClear = CreateRoundedButton("Vider", 875, 555, 85, 42, AccentRed, Color.White);
             btnClear.Click += (s, e) => ClearFiles();
 
-            // Section Progression
+            // Progression
             grpProg = CreateGroupBox("Encoding progress", 20, 608, 940, 85);
             progressBar = new RoundedProgressBar { Location = new Point(15, 25), Size = new Size(910, 18), Value = 0, ProgressColor = AccentPurple, CornerRadius = 6 };
             lblSpeedInfo = new Label { Text = "Encoding at 0.0kbits/s (0.0x) - 0s remaining", Location = new Point(15, 50), AutoSize = true, ForeColor = AccentPurple, Font = new Font("Segoe UI", 9F, FontStyle.Bold) };
@@ -307,7 +350,7 @@ namespace FFmpegConverterApp
             };
 
             panelMain.Controls.AddRange(new Control[] {
-                txtSourceBar, btnBrowseSource, grpPreset, dragDropZone, gridFiles,
+                txtSourceBar, btnAddUrl, btnBrowseSource, grpPreset, dragDropZone, gridFiles,
                 btnStart, btnBench, btnStop, btnRemove, btnClear, grpProg, txtLog
             });
 
@@ -315,6 +358,33 @@ namespace FFmpegConverterApp
             this.Controls.Add(panelSidebar);
 
             RefreshGrid();
+        }
+
+        private void AddInputPathOrUrl(string input)
+        {
+            input = input.Trim().Trim('"');
+            if (string.IsNullOrWhiteSpace(input) || input.StartsWith("Collez une URL")) return;
+
+            if (input.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
+                input.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+            {
+                if (!videoList.Any(v => v.FilePath.Equals(input, StringComparison.OrdinalIgnoreCase)))
+                {
+                    videoList.Add(new VideoItem { FilePath = input, Size = "Flux Web" });
+                    RefreshGrid();
+                    txtSourceBar.Clear();
+                    Log($"[URL AJOUTÉE] {input}");
+                }
+            }
+            else if (File.Exists(input))
+            {
+                AddFiles(new[] { input });
+                txtSourceBar.Clear();
+            }
+            else
+            {
+                MessageBox.Show("Le chemin spécifié ou l'URL est invalide.", "Erreur d'ajout", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
         }
 
         #region Embedded Logo Loader
@@ -352,21 +422,14 @@ namespace FFmpegConverterApp
             btnStop.Enabled = true;
             stopRequested = false;
 
-			// Log("... Tu prends la pilule bleue, l'histoire s'arrête là, tu te réveilles dans ton lit et tu crois ce que tu veux croire. ");
-			// Log(".... Choisis la pilule rouge et tu restes au pays des merveilles et on descend avec le lapin blanc au fond du gouffre.");
-			// Log(" Sinon...> Les options : -y -f lavfi -i ");
-			// log(" testsrc2=duration=60:size=7680x4320:rate=60 ");
-			// log(" -an -c:v libx265 -preset veryslow -crf 18 -threads 0 -f null - ");		
             Log("==============================================================");
             Log("* LANCEMENT DU BENCHMARK H.264 (Odyssée Performance Test)    *");
             Log("==============================================================");
-			
 
             lblStatus.Text = "Benchmark en cours...";
             progressBar.Value = 0;
 
-            // string args = "-y -f lavfi -i testsrc=duration=10:size=1920x1080:rate=240 -c:v libx264 -preset medium -f null -";
-			string args = "-y -f lavfi -i testsrc2=duration=60:size=7680x4320:rate=60 -an -c:v libx265 -preset veryslow -crf 18 -threads 0 -f null -";
+            string args = "-y -f lavfi -i testsrc2=duration=60:size=7680x4320:rate=60 -an -c:v libx265 -preset veryslow -crf 18 -threads 0 -f null -";
 
             Stopwatch sw = Stopwatch.StartNew();
             int maxFps = 0;
@@ -438,12 +501,11 @@ namespace FFmpegConverterApp
         }
         #endregion
 
-        #region Application Intégrale des Thèmes (Sombre & Clair Keentheme)
+        #region Application Intégrale des Thèmes
         private void ApplyTheme()
         {
             if (isDarkMode)
             {
-                // Thème Sombre Keentheme Good
                 BgDarkSidebar = Color.FromArgb(18, 19, 26);
                 BgDarkMain = Color.FromArgb(28, 29, 39);
                 BgCard = Color.FromArgb(36, 37, 50);
@@ -455,7 +517,6 @@ namespace FFmpegConverterApp
             }
             else
             {
-                // Thème Clair Keentheme Good
                 BgDarkSidebar = Color.FromArgb(240, 243, 248);
                 BgDarkMain = Color.FromArgb(248, 249, 252);
                 BgCard = Color.White;
@@ -466,12 +527,10 @@ namespace FFmpegConverterApp
                 btnThemeToggle.Text = "Mode Sombre";
             }
 
-            // Fenêtres et Panneaux
             this.BackColor = BgDarkMain;
             panelSidebar.BackColor = BgDarkSidebar;
             panelMain.BackColor = BgDarkMain;
 
-            // Panneau Latéral
             lblAppTitle.ForeColor = TextPrimary;
             lblProjectsHeader.ForeColor = TextMuted;
             lstSidebarFiles.BackColor = BgInput;
@@ -482,7 +541,6 @@ namespace FFmpegConverterApp
             btnThemeToggle.BackColor = BgInput;
             btnThemeToggle.ForeColor = TextMuted;
 
-            // Entrées & Boutons du Panneau Principal
             txtSourceBar.BackColor = BgInput;
             txtSourceBar.ForeColor = TextPrimary;
 
@@ -495,7 +553,6 @@ namespace FFmpegConverterApp
                 btnStop.ForeColor = TextMuted;
             }
 
-            // Conteneurs GroupBox (Presets & Progression)
             grpPreset.BackColor = BgCard;
             grpPreset.BorderColor = BorderColor;
             grpPreset.ForeColor = TextPrimary;
@@ -504,7 +561,6 @@ namespace FFmpegConverterApp
             grpProg.BorderColor = BorderColor;
             grpProg.ForeColor = TextPrimary;
 
-            // Libellés dans les GroupBoxes
             lblOut.ForeColor = TextMuted;
             lblFmt.ForeColor = TextMuted;
             lblCodec.ForeColor = TextMuted;
@@ -513,7 +569,6 @@ namespace FFmpegConverterApp
             lblExist.ForeColor = TextMuted;
             lblStatus.ForeColor = TextMuted;
 
-            // Contrôles de saisie
             txtOutFolder.BackColor = BgInput;
             txtOutFolder.ForeColor = TextPrimary;
 
@@ -540,11 +595,9 @@ namespace FFmpegConverterApp
             rbExistSkip.ForeColor = TextPrimary;
             rbExistAsk.ForeColor = TextPrimary;
 
-            // Zone Glisser-Déposer
             dragDropZone.BackColor = BgInput;
             dragDropZone.BorderColor = AccentPurple;
 
-            // --- STYLISATION DU TABLEAU (STYLE GOOD KEENTHEME) ---
             gridFiles.BackgroundColor = BgCard;
             gridFiles.GridColor = BorderColor;
 
@@ -557,11 +610,9 @@ namespace FFmpegConverterApp
             gridFiles.ColumnHeadersDefaultCellStyle.ForeColor = AccentPurple;
             gridFiles.ColumnHeadersDefaultCellStyle.SelectionBackColor = gridFiles.ColumnHeadersDefaultCellStyle.BackColor;
 
-            // Barre de progression
             progressBar.BackColor = BgInput;
             progressBar.ProgressColor = AccentPurple;
 
-            // RichTextBox de Log
             txtLog.BackColor = BgInput;
             txtLog.ForeColor = AccentGreen;
 
@@ -636,7 +687,7 @@ namespace FFmpegConverterApp
             if (isConverting) return;
             if (videoList.Count == 0)
             {
-                MessageBox.Show("Veuillez ajouter au moins un fichier vidéo.", "Aucun fichier", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show("Veuillez ajouter au moins un fichier vidéo ou un lien.", "Aucun fichier", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
 
@@ -671,7 +722,13 @@ namespace FFmpegConverterApp
                 item.Status = "En cours...";
                 RefreshGrid();
 
-                string destPath = Path.Combine(outFolder, Path.GetFileNameWithoutExtension(item.FilePath) + ext);
+                string rawName = Path.GetFileNameWithoutExtension(item.FileName);
+                if (string.IsNullOrWhiteSpace(rawName) || rawName.Equals("index", StringComparison.OrdinalIgnoreCase))
+                {
+                    rawName = $"Stream_{DateTime.Now:yyyyMMdd_HHmmss}";
+                }
+
+                string destPath = Path.Combine(outFolder, rawName + ext);
 
                 if (File.Exists(destPath))
                 {
@@ -683,7 +740,7 @@ namespace FFmpegConverterApp
                     }
                     else if (rbExistRename.Checked)
                     {
-                        destPath = Path.Combine(outFolder, $"{Path.GetFileNameWithoutExtension(item.FilePath)}_{DateTime.Now:HHmmss}{ext}");
+                        destPath = Path.Combine(outFolder, $"{rawName}_{DateTime.Now:HHmmss}{ext}");
                     }
                     else if (rbExistAsk.Checked)
                     {
@@ -712,7 +769,7 @@ namespace FFmpegConverterApp
 
                 args += $"\"{destPath}\"";
 
-                Log($"[DEBUT] Conversion : {item.FileName} ({currentCount}/{total})");
+                Log($"[DEBUT] Traitement : {item.FileName} ({currentCount}/{total})");
                 bool success = await Task.Run(() => RunFFmpeg(args, item, currentCount, total));
 
                 item.Status = success ? "Terminé" : (stopRequested ? "Annulé" : "Erreur");
@@ -724,7 +781,7 @@ namespace FFmpegConverterApp
             btnBench.Enabled = true;
             btnStop.Enabled = false;
 
-            lblStatus.Text = stopRequested ? "Conversion interrompue." : "Toutes les conversions sont terminées !";
+            lblStatus.Text = stopRequested ? "Traitement interrompu." : "Tous les traitements sont terminés !";
             progressBar.Value = 100;
         }
 
@@ -732,15 +789,15 @@ namespace FFmpegConverterApp
         {
             return index switch
             {
-                1 => "scale=-2:160",   // 160p
-                2 => "scale=-2:240",   // 240p
-                3 => "scale=-2:360",   // 360p
-                4 => "scale=-2:480",   // 480p
-                5 => "scale=-2:720",   // 720p
-                6 => "scale=-2:1080",  // 1080p
-                7 => "scale=-2:1440",  // 1440p
-                8 => "scale=-2:2160",  // 2160p
-                _ => ""                // Originale
+                1 => "scale=-2:160",
+                2 => "scale=-2:240",
+                3 => "scale=-2:360",
+                4 => "scale=-2:480",
+                5 => "scale=-2:720",
+                6 => "scale=-2:1080",
+                7 => "scale=-2:1440",
+                8 => "scale=-2:2160",
+                _ => ""
             };
         }
 
@@ -917,19 +974,23 @@ namespace FFmpegConverterApp
         protected override void OnPaint(PaintEventArgs e)
         {
             e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
-            Rectangle rect = new Rectangle(0, 0, Width, Height);
+
+            Rectangle rect = new Rectangle(0, 0, Width - 1, Height - 1);
             using GraphicsPath path = RoundedPanel.GetRoundedPath(rect, CornerRadius);
 
             this.Region = new Region(path);
 
             using SolidBrush bgBrush = new SolidBrush(BackColor);
-            using SolidBrush textBrush = new SolidBrush(ForeColor);
-
             e.Graphics.FillPath(bgBrush, path);
 
-            SizeF textSize = e.Graphics.MeasureString(Text, Font);
-            PointF textPos = new PointF((Width - textSize.Width) / 2, (Height - textSize.Height) / 2);
-            e.Graphics.DrawString(Text, Font, textBrush, textPos);
+            TextRenderer.DrawText(
+                e.Graphics,
+                Text,
+                Font,
+                rect,
+                ForeColor,
+                TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine
+            );
         }
     }
 
@@ -974,4 +1035,4 @@ namespace FFmpegConverterApp
         }
     }
     #endregion
-}
+} 
