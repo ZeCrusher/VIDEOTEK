@@ -6,9 +6,24 @@
     <Nullable>enable</Nullable>
     <UseWindowsForms>true</UseWindowsForms>
     <ImplicitUsings>enable</ImplicitUsings>
-    <ApplicationIcon />
-  </PropertyGroup>
 
+    <!-- Configuration Fichier Unique -->
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <PublishSingleFile>true</PublishSingleFile>
+    <SelfContained>true</SelfContained>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <IncludeAllContentForSelfExtract>true</IncludeAllContentForSelfExtract>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+
+    <!-- Icône de l'exécutable -->
+    <ApplicationIcon>icon.ico</ApplicationIcon>
+
+    <!-- Suppression des fichiers .pdb et symboles externes -->
+    <DebugType>none</DebugType>
+    <DebugSymbols>false</DebugSymbols>
+  </PropertyGroup>
+  
+  
   <ItemGroup>
     <EmbeddedResource Include="logo.png" Condition="Exists('logo.png')" />
   </ItemGroup>
