@@ -2,7 +2,7 @@
 Convertisseur de vidéo via FFMPEG (Et pourquoi pas !!)
 
 
-Capture d'écran du soft :
+Capture d'écran du soft : (Attention cette version ne fonctionne pas seul, il faut recompiler le soft pour l'avoir en mode solo !!) 
 
 <img width="1232" height="814" alt="Capture d&#39;écran 2026-10-19 152518" src="https://github.com/user-attachments/assets/011466db-5847-4b0b-af74-fb2427652791" />
 
@@ -11,6 +11,8 @@ Comment compiler ça :
 
 Forcer le nettoyage préalable (dotnet clean)
 La méthode la plus propre consiste à supprimer les anciens fichiers compilés (bin et obj) juste avant de publier. 
+
+Avec cette ligne de commande, videotek peut fonctionner seul ! 
 
 **C:\utils\C\**dotnet clean FFmpegConverter.csproj -c Release ; dotnet publish FFmpegConverter.csproj -c Release -r win-x64 --self-contained false -p:PublishSingleFile=true
 
