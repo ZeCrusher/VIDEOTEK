@@ -22,7 +22,7 @@ Pour que tout fonctionne vous devez avoir ça :
 
 📁 VIDEOTEK /
 
-├── 📄 VIDEOTEK.exe       (Votre application autonome avec toutes ses DLLs et son logo)
+├── 📄 VIDEOTEK.exe   
 
 └── 📄 ffmpeg.exe        (L'exécutable FFmpeg téléchargé)
 
