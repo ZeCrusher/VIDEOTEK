@@ -21,6 +21,8 @@ dotnet publish FFmpegConverter.csproj -c Release -r win-x64 --self-contained fal
 Pour que tout fonctionne vous devez avoir ça :
 
 📁 VIDEOTEK /
+
 ├── 📄 VIDEOTEK.exe       (Votre application autonome avec toutes ses DLLs et son logo)
+
 └── 📄 ffmpeg.exe        (L'exécutable FFmpeg téléchargé)
 
